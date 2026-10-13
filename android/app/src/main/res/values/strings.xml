@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">宿舍账本</string>
+    <string name="splash_loading">正在加载…</string>
+    <string name="share_backup">分享备份文件</string>
+</resources>

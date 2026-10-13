@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与网页端一致的配色 -->
+    <color name="page_bg">#F5FAFB</color>
+    <color name="brand">#0891B2</color>
+    <color name="brand_dark">#0E7490</color>
+    <color name="text_muted">#6B7C85</color>
+    <color name="ic_launcher_background">#0891B2</color>
+</resources>

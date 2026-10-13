@@ -1,0 +1,28 @@
+# ===== 个人求职文档（不上传）=====
+面试准备.md
+面试问题集-进阶.md
+
+# ===== 已废弃的旧安装包（v1.1 为修复键盘滚动问题后的可用版本）=====
+宿舍账本-v1.0.apk
+
+# ===== Android 构建产物与本地环境 =====
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+*.iml
+
+# ===== 签名文件（绝不提交）=====
+*.jks
+*.keystore
+keystore.properties
+
+# ===== 工作区内的其他项目（不纳入本仓库）=====
+TraeSign/
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+.vscode/

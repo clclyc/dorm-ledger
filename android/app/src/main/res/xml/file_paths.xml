@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 导出备份：应用私有目录 files/exports/ -->
+    <files-path name="exports" path="exports/" />
+    <!-- 备用：缓存目录 -->
+    <cache-path name="cache" path="." />
+    <!-- 备用：外部私有目录 -->
+    <external-files-path name="ext_exports" path="exports/" />
+</paths>

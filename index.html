@@ -1,0 +1,2386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0891b2">
+<title>宿舍账本 · 宿舍公共开销分摊器</title>
+<style>
+  /* ============ 设计变量（现代简约清新 · 蓝绿色系） ============ */
+  :root {
+    --bg: #f5fafb;                 /* 极浅青灰底，护眼 */
+    --card: #ffffff;
+    --text: #1c2b31;               /* 深青灰，比纯黑柔和 */
+    --muted: #6b7c85;
+
+    --brand: #0891b2;              /* 主色：清爽青蓝 */
+    --brand-dark: #0e7490;
+    --brand-soft: #ecfeff;
+    --brand-border: #bfe9f0;
+    --brand-ring: rgba(8, 145, 178, .15);
+
+    --accent: #0d9488;             /* 辅助色：青绿，用于「收款 / 完成」语义 */
+    --pos: #0d9488;                /* 应收 */
+    --neg: #dc2626;                /* 应付 */
+    --warn: #c2410c;
+
+    --border: #e3eef1;
+    --border-soft: #eff5f7;
+
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow: 0 1px 2px rgba(13, 74, 86, .04), 0 8px 20px rgba(13, 74, 86, .05);
+    --shadow-hover: 0 2px 6px rgba(13, 74, 86, .06), 0 12px 28px rgba(13, 74, 86, .09);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    /* 中文优先的系统字体栈：优先 HarmonyOS / 思源黑体 / Noto，回退到各平台默认黑体。
+       刻意不 @import 网络字体，保证「双击打开即用、离线可用、无外部请求」这一核心定位。 */
+    font-family: "HarmonyOS Sans SC", "Source Han Sans SC", "Noto Sans SC", -apple-system,
+      BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI",
+      "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding-bottom: 48px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* 手写内联 SVG 统一为线性图标风格 */
+  svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  .container { max-width: 1120px; margin: 0 auto; padding: 0 22px; }
+
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ============ 顶部（轻盈浅色，不压重） ============ */
+  .app-header {
+    background: linear-gradient(135deg, #e9f8fb 0%, #f3fbfc 55%, #ecfaf7 100%);
+    border-bottom: 1px solid #dcf0f3;
+    padding: 26px 0;
+    margin-bottom: 24px;
+  }
+  .header-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand-block { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .brand-mark {
+    flex: none;
+    width: 44px; height: 44px;
+    border-radius: 13px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff;
+    background: linear-gradient(135deg, #0891b2, #0d9488);
+    box-shadow: 0 6px 16px rgba(8, 145, 178, .28);
+  }
+  .brand-mark svg { width: 22px; height: 22px; }
+  .app-header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .3px; color: var(--brand-dark); }
+  .app-header .sub { margin: 4px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+  .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-soft {
+    background: #fff;
+    border: 1px solid var(--brand-border);
+    color: var(--brand-dark);
+    font-weight: 500;
+  }
+  .btn-soft:hover { background: var(--brand-soft); border-color: var(--brand); }
+  .btn-soft:active { transform: translateY(1px); }
+
+  /* ============ 布局：桌面 45% / 55% 分栏 ============ */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+    gap: 22px;
+    align-items: start;
+  }
+  .col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+
+  /* ============ 卡片 ============ */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 22px;
+    transition: box-shadow .2s;
+  }
+  .card h2 {
+    margin: 0 0 18px;
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: .2px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .h-title { display: inline-flex; align-items: center; gap: 9px; }
+  .h-icon { width: 18px; height: 18px; color: var(--brand); flex: none; }
+  .badge {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--brand-dark);
+    background: var(--brand-soft);
+    border: 1px solid var(--brand-border);
+    border-radius: 999px;
+    padding: 2px 11px;
+  }
+  .muted { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+  #total-spend {
+    font-size: 13px; font-weight: 700; color: var(--brand-dark);
+    background: var(--brand-soft); border: 1px solid var(--brand-border);
+    border-radius: 999px; padding: 2px 11px;
+  }
+
+  /* ============ 按钮 ============ */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 9px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .16s, border-color .16s, box-shadow .16s, transform .08s, opacity .16s;
+    white-space: nowrap;
+  }
+  .btn svg { width: 16px; height: 16px; flex: none; }
+  .btn:hover { background: #f5fbfc; border-color: var(--brand-border); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--brand-ring); }
+  .btn-primary {
+    background: linear-gradient(135deg, #0891b2, #0e7490);
+    border-color: var(--brand);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(8, 145, 178, .24);
+  }
+  .btn-primary:hover { background: linear-gradient(135deg, #0e7490, #0c6577); border-color: var(--brand-dark); }
+  .btn-danger-ghost { color: var(--neg); border-color: #f6d5d5; background: #fff; }
+  .btn-danger-ghost:hover { background: #fef3f3; border-color: #f0b4b4; }
+  .btn-small { padding: 5px 12px; font-size: 12.5px; border-radius: 8px; }
+  .btn-small svg { width: 14px; height: 14px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-block { width: 100%; }
+
+  /* ============ 表单 ============ */
+  label, .field-label { display: block; font-size: 13px; font-weight: 500; color: #4c6470; margin-bottom: 7px; }
+
+  input[type="text"], input[type="date"], input[type="number"], select {
+    width: 100%;
+    padding: 10px 13px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text);
+    background: #fff;
+    outline: none;
+    transition: border-color .16s, box-shadow .16s;
+  }
+  input:hover, select:hover { border-color: var(--brand-border); }
+  input:focus, select:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-ring);
+  }
+  input:disabled { background: #f6fafb; color: #9fb3ba; cursor: not-allowed; }
+  input::placeholder { color: #a9bcc3; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .field-full { grid-column: 1 / -1; }
+
+  .member-form { display: flex; gap: 10px; margin-top: 16px; }
+  .member-form input { flex: 1; min-width: 0; }
+
+  /* 金额输入框：左侧固定 ¥ 前缀（纯样式包装，不影响 JS 取值） */
+  .amount-wrap { position: relative; }
+  .amount-wrap .amount-prefix {
+    position: absolute;
+    left: 13px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--brand); font-size: 14px; font-weight: 600;
+    pointer-events: none;
+  }
+  .amount-wrap input { padding-left: 30px; font-variant-numeric: tabular-nums; }
+
+  /* ============ 宿舍人数：步进器 ============ */
+  .limit-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .limit-row label { margin: 0; flex: none; }
+  .stepper {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    overflow: hidden;
+    transition: border-color .16s, box-shadow .16s;
+  }
+  .stepper:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
+  .step-btn {
+    width: 36px; height: 38px;
+    border: none; background: transparent;
+    color: var(--brand);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .step-btn svg { width: 16px; height: 16px; stroke-width: 2; }
+  .step-btn:hover:not(:disabled) { background: var(--brand-soft); }
+  .step-btn:disabled { color: #c4d5da; cursor: not-allowed; }
+  .stepper input[type="number"] {
+    width: 58px;
+    text-align: center;
+    border: none;
+    border-radius: 0;
+    padding: 8px 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--brand-dark);
+    background: transparent;
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .stepper input[type="number"]:focus { box-shadow: none; border: none; }
+  .stepper input[type="number"]::-webkit-outer-spin-button,
+  .stepper input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .limit-hint { font-size: 12.5px; color: var(--muted); }
+  .limit-hint.warn { color: var(--warn); font-weight: 500; }
+
+  /* ============ 标签式选择（付款人 / 参与分摊） ============ */
+  .tags-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chk {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #4c6470;
+    cursor: pointer;
+    background: #fff;
+    user-select: none;
+    transition: border-color .16s, background .16s, color .16s, box-shadow .16s;
+  }
+  .chk:hover { border-color: var(--brand-border); background: #fafdfe; }
+  .chk input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+  .chk-check {
+    display: inline-flex;
+    width: 15px; height: 15px;
+    color: #fff;
+    border-radius: 50%;
+    background: var(--brand);
+    align-items: center; justify-content: center;
+    opacity: 0;
+    transform: scale(.6);
+    transition: opacity .16s, transform .16s;
+  }
+  .chk-check svg { width: 10px; height: 10px; stroke-width: 3; }
+  /* 选中态由 JS 同步 .is-on 类（不依赖 :has()，兼容性更稳） */
+  .chk.is-on {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand-dark);
+    box-shadow: 0 1px 3px rgba(8, 145, 178, .12);
+  }
+  .chk.is-on .chk-check { opacity: 1; transform: scale(1); }
+  .chk:focus-within { box-shadow: 0 0 0 3px var(--brand-ring); }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ============ 成员列表 ============ */
+  .member-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .member-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: linear-gradient(180deg, #f2fdff, #e6f9fc);
+    border: 1px solid var(--brand-border);
+    color: var(--brand-dark);
+    border-radius: 999px;
+    padding: 3px 5px 3px 3px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  /* 姓名区域：点开可查看 / 添加成员照片 */
+  .member-open {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 999px;
+    line-height: 1.5;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .member-open:hover { background: rgba(8, 145, 178, .12); }
+  .member-open:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--brand-ring); }
+  .member-del {
+    border: none;
+    background: transparent;
+    color: var(--brand);
+    line-height: 1;
+    min-width: 28px;
+    min-height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .member-del svg { width: 14px; height: 14px; stroke-width: 2.2; }
+  .member-del:hover { background: #d3f0f6; color: var(--neg); }
+
+  /* ============ 成员照片弹层（点姓名展开两个竖向空槽） ============ */
+  .photo-pop {
+    position: fixed;
+    z-index: 60;
+    width: 142px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-hover);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transform-origin: top center;
+    animation: pop-in .16s ease-out;
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(-6px) scale(.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .photo-pop[hidden] { display: none; }
+  .photo-pop-head { display: flex; align-items: center; gap: 7px; padding: 0 1px 1px; }
+  .photo-pop-avatar {
+    flex: none; width: 22px; height: 22px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff;
+    background: linear-gradient(135deg, #0891b2, #0d9488);
+  }
+  .photo-pop-name { font-size: 12.5px; font-weight: 600; color: var(--brand-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .photo-slot-wrap { position: relative; }
+  .photo-slot {
+    position: relative;
+    width: 100%;
+    height: 82px;
+    border: 1.5px dashed var(--brand-border);
+    border-radius: 10px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px;
+    padding: 0; cursor: pointer;
+    font-family: inherit; font-size: 11px; font-weight: 500;
+    overflow: hidden;
+    transition: border-color .16s, background .16s;
+  }
+  .photo-slot:hover { border-color: var(--brand); background: #e2f6fa; }
+  .photo-slot:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
+  .photo-slot svg { width: 20px; height: 20px; }
+  .photo-slot.has-img { border-style: solid; border-color: var(--border); background: #eef4f6; cursor: zoom-in; }
+  .photo-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-rm {
+    position: absolute; top: 3px; right: 3px;
+    width: 20px; height: 20px; border-radius: 50%;
+    border: none; background: rgba(15, 45, 52, .62); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; padding: 0;
+    opacity: 0; transition: opacity .15s, background .15s;
+  }
+  .photo-slot-wrap:hover .photo-rm { opacity: 1; }
+  .photo-rm:focus-visible { opacity: 1; outline: none; box-shadow: 0 0 0 3px var(--brand-ring); }
+  .photo-rm:hover { background: var(--neg); }
+  .photo-rm svg { width: 11px; height: 11px; stroke-width: 2.6; }
+
+  /* ============ 照片查看：点已放入的照片 -> 放大 ============ */
+  .photo-view {
+    position: fixed; inset: 0; z-index: 70;
+    background: rgba(10, 30, 36, .72);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    animation: fade-in .16s ease-out;
+  }
+  .photo-view[hidden] { display: none; }
+  .photo-view-panel {
+    position: relative;
+    display: flex; flex-direction: column; gap: 12px;
+    background: #fff; border-radius: 18px; padding: 14px;
+    box-shadow: 0 20px 50px rgba(6, 30, 36, .4);
+    animation: pop-in .18s ease-out;
+  }
+  .photo-view-img {
+    display: block;
+    max-width: min(86vw, 520px);
+    max-height: 68vh;
+    width: auto; height: auto;
+    border-radius: 12px;
+    background: #eef4f6;
+    object-fit: contain;
+  }
+  .photo-view-close {
+    position: absolute; top: -13px; right: -13px;
+    width: 30px; height: 30px; border-radius: 50%;
+    border: none; cursor: pointer; padding: 0;
+    background: #fff; color: var(--text);
+    box-shadow: 0 3px 12px rgba(6, 30, 36, .28);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .photo-view-close svg { width: 14px; height: 14px; stroke-width: 2.4; }
+  .photo-view-close:hover { color: var(--neg); }
+  .photo-view-actions { display: flex; justify-content: center; gap: 10px; }
+
+  /* ============ 照片裁剪弹层（选图后先裁剪，再压缩入库） ============ */
+  .crop-mask {
+    position: fixed; inset: 0; z-index: 80;
+    background: rgba(10, 30, 36, .72);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    animation: fade-in .16s ease-out;
+  }
+  .crop-mask[hidden] { display: none; }
+  .crop-panel {
+    background: #fff; border-radius: 18px; padding: 16px;
+    max-width: min(94vw, 500px);
+    box-shadow: 0 20px 50px rgba(6, 30, 36, .4);
+    display: flex; flex-direction: column; gap: 12px;
+    animation: pop-in .18s ease-out;
+  }
+  .crop-head { font-size: 14.5px; font-weight: 600; color: var(--brand-dark); }
+  .crop-stage {
+    position: relative; overflow: hidden;
+    align-self: center;
+    border-radius: 12px; background: #0f2d34;
+    touch-action: none;
+  }
+  .crop-img { display: block; -webkit-user-drag: none; user-select: none; }
+  .crop-box {
+    position: absolute; left: 0; top: 0;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 9999px rgba(6, 26, 32, .55);   /* 方框外压暗，仅裁到舞台内 */
+    cursor: move;
+  }
+  .crop-hd {
+    position: absolute; width: 16px; height: 16px;
+    background: #fff; border: 2px solid var(--brand);
+    border-radius: 50%;
+  }
+  .crop-hd[data-crop-dir="nw"] { left: -8px; top: -8px; cursor: nwse-resize; }
+  .crop-hd[data-crop-dir="ne"] { right: -8px; top: -8px; cursor: nesw-resize; }
+  .crop-hd[data-crop-dir="sw"] { left: -8px; bottom: -8px; cursor: nesw-resize; }
+  .crop-hd[data-crop-dir="se"] { right: -8px; bottom: -8px; cursor: nwse-resize; }
+  .crop-tip { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+  .crop-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ============ 表格（斑马纹） ============ */
+  .table-wrap { overflow-x: auto; margin: 0 -4px; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+  th, td { padding: 11px 10px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-size: 11.5px; font-weight: 600; color: var(--muted);
+    background: #f4fafb; border-bottom: 1px solid var(--border);
+  }
+  thead th:first-child { border-top-left-radius: 10px; }
+  thead th:last-child { border-top-right-radius: 10px; }
+  tbody td { border-bottom: 1px solid var(--border-soft); font-variant-numeric: tabular-nums; }
+  tbody tr:nth-child(even) td { background: #f8fdfe; }
+  tbody tr:hover td { background: var(--brand-soft); }
+  tfoot td { font-weight: 700; background: #f4fafb; border-bottom: none; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--pos); font-weight: 700; font-size: 14px; }
+  .neg { color: var(--neg); font-weight: 700; font-size: 14px; }
+  .zero { color: var(--muted); }
+
+  /* ============ 分类标签 ============ */
+  .tag { display: inline-block; font-size: 11.5px; padding: 3px 9px; border-radius: 999px; font-weight: 600; }
+  .cat-utility { background: #e0f7fa; color: #0e7490; }
+  .cat-meal    { background: #fff2e2; color: #c2410c; }
+  .cat-daily   { background: #e4f7ef; color: #0f766e; }
+  .cat-print   { background: #edf0fd; color: #4f46e5; }
+  .cat-other   { background: #eff4f6; color: #546a72; }
+
+  /* ============ 结算方案（核心亮点：转账卡片） ============ */
+  .settle-hint {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12.5px; color: var(--brand-dark); font-weight: 500;
+    background: var(--brand-soft); border: 1px solid var(--brand-border);
+    border-radius: 999px; padding: 3px 12px; margin: 0 0 14px;
+  }
+  .settle-hint svg { width: 14px; height: 14px; }
+  .settle-list { display: flex; flex-direction: column; gap: 10px; }
+  .transfer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--brand-border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff, #fbfeff);
+    font-size: 14px;
+    transition: border-color .18s, box-shadow .18s, transform .18s;
+  }
+  .transfer:hover {
+    border-color: var(--brand-border);
+    border-left-color: var(--brand);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+  .transfer .avatar {
+    flex: none;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #94a3b8, #64748b);   /* 付款人：中性灰 */
+  }
+  .transfer .avatar.to { background: linear-gradient(135deg, #0891b2, #0d9488); }  /* 收款人：主色 */
+  .transfer .who { font-weight: 600; color: #33474f; }
+  .transfer .flow { display: inline-flex; align-items: center; gap: 6px; }
+  .transfer .arrow { color: var(--brand); width: 20px; height: 20px; flex: none; }
+  .transfer .amt {
+    margin-left: auto;
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--brand-dark);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ============ 支出记录 ============ */
+  .expense-list { list-style: none; margin: 0; padding: 0; }
+  .expense-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 13px 12px;
+    border-bottom: 1px solid var(--border-soft);
+    border-radius: 10px;
+    transition: background .16s;
+  }
+  .expense-item:hover { background: #f8fdfe; }
+  .expense-item:last-child { border-bottom: none; }
+  .exp-main { flex: 1; min-width: 0; }
+  .exp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .exp-title { font-weight: 500; word-break: break-all; }
+  .exp-amount { margin-left: auto; font-weight: 800; font-size: 15px; color: var(--brand-dark); font-variant-numeric: tabular-nums; }
+  .exp-meta { font-size: 12.5px; color: var(--muted); margin-top: 4px; word-break: break-all; }
+  .exp-actions { display: flex; gap: 6px; flex: none; }
+  .btn-settle { color: var(--accent); border-color: #bfe7e0; background: #fff; }
+  .btn-settle:hover { background: #f0fbf8; border-color: var(--accent); }
+  .settle-badge {
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    background: #eef4f6; border: 1px solid var(--border);
+    border-radius: 999px; padding: 2px 8px;
+  }
+  .expense-item.is-settled .exp-title { color: var(--muted); }
+  .expense-item.is-settled .tag { opacity: .6; }
+  .expense-item.is-settled .exp-amount {
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: rgba(107, 124, 133, .55);
+  }
+
+  /* ============ 空状态（配线性图标） ============ */
+  .empty-state { text-align: center; padding: 22px 12px; }
+  .empty-icon { width: 42px; height: 42px; color: #b6cdd4; margin: 0 auto 12px; stroke-width: 1.5; }
+  .empty { text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.7; padding: 18px 12px; margin: 0; }
+  .empty-state .empty { padding: 0; }
+  .empty-small { color: var(--muted); font-size: 13.5px; line-height: 1.7; margin: 0; }
+  .success-text { color: var(--accent); }
+  .empty-state .success-text { font-weight: 600; }
+
+  /* ============ Toast ============ */
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 32px;
+    transform: translate(-50%, 16px);
+    background: rgba(15, 45, 52, .95);
+    color: #fff;
+    padding: 12px 22px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    max-width: 90vw;
+    text-align: center;
+    box-shadow: 0 10px 28px rgba(13, 74, 86, .28);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s, transform .22s;
+    z-index: 99;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.error { background: var(--neg); }
+  #toast.success { background: var(--accent); }
+
+  footer.page-footer { text-align: center; font-size: 12.5px; color: var(--muted); line-height: 1.7; margin-top: 30px; }
+
+  /* ============ 响应式 ============ */
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .container { padding: 0 15px; }
+    .app-header { padding: 20px 0 22px; margin-bottom: 16px; }
+    .header-row { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .app-header h1 { font-size: 20px; }
+    .brand-mark { width: 38px; height: 38px; border-radius: 11px; }
+    .header-actions { width: 100%; gap: 8px; }
+    .header-actions .btn { flex: 1 1 auto; }
+    .card { padding: 17px; }
+    .layout, .col { gap: 16px; }
+    .form-grid { grid-template-columns: 1fr; gap: 13px; }
+    .exp-amount { margin-left: 0; }
+    /* 手机端增大点按热区 */
+    .btn:not(.btn-small) { min-height: 42px; }
+    input[type="text"], input[type="date"], input[type="number"], select { min-height: 44px; }
+    .stepper input[type="number"] { min-height: 40px; }
+    .step-btn { width: 42px; height: 42px; }
+    .chk { padding: 9px 15px; }
+    .transfer { padding: 12px; }
+  }
+  @media (max-width: 520px) {
+    .app-header h1 { font-size: 18px; }
+    .transfer .who { font-size: 13.5px; }
+  }
+
+  /* ============ 移动端 / Android WebView 适配（新增，不改动任何原有样式与逻辑） ============ */
+  :root {
+    --sat: env(safe-area-inset-top, 0px);    /* 状态栏 / 刘海顶部安全区 */
+    --sab: env(safe-area-inset-bottom, 0px); /* 手势导航条底部安全区 */
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --kb: 0px;                               /* 软键盘高度，由 Android 原生侧写入 */
+  }
+
+  /* 顶部安全区：页头内容避开状态栏 / 刘海 */
+  .app-header { padding-top: calc(26px + var(--sat)); }
+
+  /* 底部安全区：页面内容避开手势导航条，避免被遮挡 */
+  body { padding-bottom: calc(48px + var(--sab)); }
+
+  /* 左右安全区：横屏 / 挖孔屏两侧 */
+  .container { padding-left: calc(22px + var(--sal)); padding-right: calc(22px + var(--sar)); }
+
+  /* 全屏弹层同样避让安全区 */
+  .photo-view { padding: calc(24px + var(--sat)) 24px calc(24px + var(--sab)); }
+  .crop-mask  { padding: calc(20px + var(--sat)) 20px calc(20px + var(--sab)); }
+
+  /* Toast 抬到安全区之上；键盘弹出时进一步上移，避免被键盘盖住 */
+  #toast { bottom: calc(32px + var(--sab)); }
+  html.kb-open #toast { bottom: calc(24px + var(--kb) + var(--sab)); }
+
+  /* 说明：键盘弹出时「把聚焦输入框滚入可视区」由 WebView 自身完成——
+     原生侧已经把 WebView 的高度让出了键盘高度，Chromium 会自动做最小幅度滚动，
+     既保证输入框不被键盘遮挡，又不会把页面多滚一截。
+     这里刻意不加 scroll-margin / scrollIntoView，避免与浏览器原生滚动叠加导致「上滑过多」。 */
+
+  /* 小屏断点下保持原有内边距，同时叠加安全区 */
+  @media (max-width: 640px) {
+    .app-header { padding-top: calc(20px + var(--sat)); padding-bottom: 22px; }
+    .container { padding-left: calc(15px + var(--sal)); padding-right: calc(15px + var(--sar)); }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="container header-row">
+    <div class="brand-block">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1"/><path d="M3 8v9a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-2"/><path d="M20 9.5h-3.2a2.2 2.2 0 0 0 0 4.4H20a1 1 0 0 0 1-1v-2.4a1 1 0 0 0-1-1Z"/></svg>
+      </span>
+      <div>
+        <h1>宿舍账本</h1>
+        <p class="sub">宿舍公共开销分摊器 · 支持 2~12 人 · 自动算账 · 最优结算 · 数据只存在本机浏览器</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn btn-soft" id="btn-copy-bill">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+        复制账单
+      </button>
+      <button type="button" class="btn btn-soft" id="btn-export">
+        <svg viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M12 3v11"/><path d="m7.5 10 4.5 4.5L16.5 10"/></svg>
+        导出备份
+      </button>
+      <button type="button" class="btn btn-soft" id="btn-import">
+        <svg viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M12 15V4"/><path d="m7.5 8.5 4.5-4.5L16.5 8.5"/></svg>
+        导入备份
+      </button>
+      <button type="button" class="btn btn-soft" id="btn-clear">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M10 11v6M14 11v6"/></svg>
+        清空数据
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="container layout">
+  <!-- ============ 左栏：操作区 ============ -->
+  <div class="col">
+    <!-- 成员管理 -->
+    <section class="card">
+      <h2>
+        <span class="h-title">
+          <svg class="h-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.6a3 3 0 0 1 0 5.7"/><path d="M17.6 13.7A5.5 5.5 0 0 1 20.5 19"/></svg>
+          宿舍成员
+        </span>
+        <span class="badge" id="member-count">未设置</span>
+      </h2>
+
+      <!-- 第一步：先声明宿舍人数，再逐个添加姓名 -->
+      <div class="limit-row">
+        <label for="member-limit">宿舍人数</label>
+        <div class="stepper">
+          <button type="button" class="step-btn" id="limit-minus" aria-label="减少宿舍人数">
+            <svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
+          </button>
+          <input type="number" id="member-limit" min="2" max="12" step="1" inputmode="numeric" placeholder="4" aria-label="宿舍人数">
+          <button type="button" class="step-btn" id="limit-plus" aria-label="增加宿舍人数">
+            <svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg>
+          </button>
+        </div>
+        <span class="limit-hint" id="limit-hint"></span>
+      </div>
+
+      <div class="member-list" id="member-list"></div>
+      <div class="empty-state" id="member-empty">
+        <svg class="empty-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.6a3 3 0 0 1 0 5.7"/><path d="M17.6 13.7A5.5 5.5 0 0 1 20.5 19"/></svg>
+        <p class="empty">还没有室友，先用上方步进器设置「宿舍人数」，再添加第一位成员吧</p>
+      </div>
+      <form class="member-form" id="member-form" autocomplete="off">
+        <input type="text" id="member-name" maxlength="12" placeholder="输入成员姓名（最多12字）">
+        <button type="submit" class="btn btn-primary" id="btn-add-member">添加</button>
+      </form>
+    </section>
+
+    <!-- 添加支出 -->
+    <section class="card">
+      <h2>
+        <span class="h-title">
+          <svg class="h-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+          添加公共支出
+        </span>
+      </h2>
+      <form class="form-grid" id="expense-form" autocomplete="off">
+        <div class="field-full">
+          <p class="empty-small" id="form-hint">请先添加宿舍成员，再进行记账</p>
+        </div>
+        <div class="field">
+          <label for="exp-title">事项</label>
+          <input type="text" id="exp-title" maxlength="30" placeholder="例如：9月电费 / 楼下聚餐">
+        </div>
+        <div class="field">
+          <label for="exp-amount">金额（元）</label>
+          <div class="amount-wrap">
+            <span class="amount-prefix" aria-hidden="true">¥</span>
+            <input type="text" id="exp-amount" inputmode="decimal" placeholder="0.00">
+          </div>
+        </div>
+        <div class="field">
+          <label for="exp-date">日期</label>
+          <input type="date" id="exp-date">
+        </div>
+        <div class="field">
+          <label for="exp-category">分类</label>
+          <select id="exp-category"></select>
+        </div>
+        <div class="field">
+          <span class="field-label">付款人（垫付的人）</span>
+          <!-- 可见的是标签式单选；原生 select 保留为取值来源，两者实时同步 -->
+          <div class="tags-row" id="exp-payer-tags" role="radiogroup" aria-label="付款人"></div>
+          <select id="exp-payer" class="visually-hidden" tabindex="-1" aria-hidden="true"></select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn btn-primary btn-block" id="btn-add-expense">添加支出</button>
+        </div>
+        <div class="field field-full">
+          <label>参与分摊的人（默认全选）</label>
+          <div class="tags-row" id="exp-participants"></div>
+          <div class="hint">
+            <button type="button" class="btn btn-small" id="btn-select-all">全选</button>
+            <button type="button" class="btn btn-small" id="btn-select-none">全不选</button>
+          </div>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <!-- ============ 右栏：结果展示区 ============ -->
+  <div class="col">
+    <!-- 统计 -->
+    <section class="card">
+      <h2>
+        <span class="h-title">
+          <svg class="h-icon" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 20v-6M12 20V6M17 20v-9"/></svg>
+          账目统计
+        </span>
+        <span class="muted" id="total-spend"></span>
+      </h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>成员</th><th>垫付总额</th><th>应分摊</th><th>净余额</th></tr>
+          </thead>
+          <tbody id="stats-body"></tbody>
+          <tfoot id="stats-foot"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- 结算方案 -->
+    <section class="card">
+      <h2>
+        <span class="h-title">
+          <svg class="h-icon" viewBox="0 0 24 24"><path d="M4 8h13l-3.5-3.5"/><path d="M20 16H7l3.5 3.5"/></svg>
+          最优结算方案
+        </span>
+        <button type="button" class="btn btn-small" id="btn-copy-settlement">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+          复制方案
+        </button>
+      </h2>
+      <div id="settlement"></div>
+    </section>
+
+    <!-- 支出记录 -->
+    <section class="card">
+      <h2>
+        <span class="h-title">
+          <svg class="h-icon" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>
+          支出记录
+        </span>
+        <span class="badge" id="expense-count">0 条</span>
+      </h2>
+      <ul class="expense-list" id="expense-list"></ul>
+      <div class="empty-state" id="expense-empty">
+        <svg class="empty-icon" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v16l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1Z"/><path d="M9 8h6M9 12h6"/></svg>
+        <p class="empty">还没有记账，点上方「添加公共支出」记下第一笔宿舍开销吧</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="container page-footer">
+  数据保存在当前浏览器 localStorage 中，清理浏览器数据会丢失记录，建议定期「导出备份」。
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+<div id="photo-pop" class="photo-pop" hidden role="dialog" aria-label="成员照片"></div>
+<div id="photo-view" class="photo-view" hidden role="dialog" aria-label="查看照片"></div>
+<div id="crop-mask" class="crop-mask" hidden role="dialog" aria-label="裁剪照片"></div>
+<input type="file" id="photo-file" accept="image/*" hidden>
+
+<script>
+/* =====================================================================
+ * 宿舍账本 —— 宿舍公共开销分摊器
+ * 纯前端单文件实现：无框架、无依赖、无后端
+ *
+ * 代码分区：
+ *   1. 常量与全局状态
+ *   2. 通用工具函数（格式化 / 转义 / 金额解析 / Toast）
+ *   3. 数据持久化与数据校验
+ *   4. 核心计算（分摊 / 净余额 / 贪心结算）
+ *   5. 渲染层
+ *   6. 事件绑定与初始化
+ * ===================================================================== */
+
+/* ---------------------------------------------------------------------
+ * 1. 常量与全局状态
+ * ------------------------------------------------------------------- */
+
+/**
+ * 宿舍人数由用户在界面上设置，这里定义它的取值范围。
+ * 注意：memberLimit 是「上限」，成员的真实人数 = 用户实际添加了几个人。
+ * 之所以不把「声明人数」当成必须填满的硬要求，是因为用户完全可能先给 4 个室友记账、
+ * 第 5 个室友之后才补上来，硬性凑满反而会挡住正常使用。
+ */
+const DEFAULT_MEMBER_LIMIT = 4;   // 默认值：四人寝是宿舍最常见的形态
+const MIN_MEMBER_LIMIT = 2;       // 下限：至少 2 个人才谈得上「分摊」
+const MAX_MEMBER_LIMIT = 12;      // 上限：再多人会让成员列表与结算结果过于分散
+
+/** localStorage 存储键（带版本号，便于日后数据结构升级） */
+const STORAGE_KEY = 'dorm-ledger:v1';
+
+/** 支出分类定义（key 用于存储，label 用于展示，cls 为标签配色类名） */
+const CATEGORIES = [
+  { key: 'utility', label: '水电',   cls: 'cat-utility' },
+  { key: 'meal',    label: '聚餐',   cls: 'cat-meal'    },
+  { key: 'daily',   label: '日用品', cls: 'cat-daily'   },
+  { key: 'print',   label: '打印',   cls: 'cat-print'   },
+  { key: 'other',   label: '其他',   cls: 'cat-other'   }
+];
+
+/** 内联 SVG 小图标（仅用于视图层，不参与任何业务计算） */
+const ICON_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>';
+const ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const ICON_FLOW  = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13l-3.5 3.5"/><path d="M20 17H7l3.5-3.5"/></svg>';
+const ICON_EMPTY_SETTLE = '<svg class="empty-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13l-3.5-3.5"/><path d="M20 16H7l3.5 3.5"/></svg>';
+const ICON_EMPTY_OK = '<svg class="empty-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.8 2.8L16 9"/></svg>';
+const ICON_CAM = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="3.2"/><path d="M9 7l1.2-2h3.6L15 7"/></svg>';
+const ICON_X_SMALL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+/**
+ * 全局状态。金额统一使用「分」为单位的整数存储，避免浮点误差。
+ * state = {
+ *   memberLimit: number,   // 宿舍人数（成员上限），0 表示用户还没设置
+ *   members:  [{ id, name, photos:[dataURL|null, dataURL|null] }],
+ *   expenses: [{ id, title, amountCents, payerId, participantIds:[], date, category, settled, createdAt }]
+ * }
+ * 说明：expense.settled === true 表示该笔已结清——账单保留在列表里，但不再计入当前账目。
+ */
+let state = { memberLimit: 0, members: [], expenses: [] };
+
+/* ---------------------------------------------------------------------
+ * 2. 通用工具函数
+ * ------------------------------------------------------------------- */
+
+/** 生成一个足够唯一的 id（时间戳 + 随机串，避免同一毫秒内冲突） */
+function uid() {
+  return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+/** 金额格式化：分 -> ¥xx.xx */
+function fmt(cents) {
+  const abs = Math.abs(Math.round(cents || 0));
+  const text = '¥' + (abs / 100).toFixed(2);
+  return cents < 0 ? '-' + text : text;
+}
+
+/** 取本地「今天」的 yyyy-MM-dd，不能直接用 toISOString（那是 UTC，会差一天） */
+function todayStr() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+/**
+ * HTML 转义：所有用户输入在拼接到 innerHTML 之前都必须经过这里，防止 XSS。
+ * 例如成员名叫 <img src=x onerror=alert(1)> 时，会被转成纯文本。
+ */
+function esc(value) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(value == null ? '' : value).replace(/[&<>"']/g, ch => map[ch]);
+}
+
+/**
+ * 把用户输入的「元」字符串安全转换为「分」整数。
+ * 不使用 parseFloat * 100（0.29 * 100 === 28.999999999999996 ），
+ * 而是按小数点拆分后做整数运算，保证精确到分。
+ * @returns {number|null} 合法返回整数分，非法返回 null
+ */
+function parseYuanToCents(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (s === '') return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;   // 只允许正数、最多两位小数
+  const parts = s.split('.');
+  const yuan = parseInt(parts[0], 10);
+  const decimals = (parts[1] || '') + '00';        // 补足两位
+  const cents = parseInt(decimals.slice(0, 2), 10);
+  const total = yuan * 100 + cents;
+  return Number.isSafeInteger(total) && total > 0 ? total : null;
+}
+
+/** 轻量提示条（使用 textContent 赋值，天然不触发 XSS） */
+let toastTimer = null;
+function toast(message, type) {
+  const el = document.getElementById('toast');
+  el.textContent = message;
+  el.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 2200);
+}
+
+/**
+ * 复制文本到剪贴板。
+ * https / localhost 下优先用异步的 navigator.clipboard；
+ * 直接双击打开的 file:// 页面属于非安全上下文，该 API 不可用，降级为隐藏 textarea + execCommand。
+ * @returns {Promise<void>} 复制成功 resolve，失败 reject
+ */
+function copyText(text) {
+  // 降级方案：隐藏 textarea + execCommand，兼容 file:// 与非聚焦场景
+  const fallback = function () {
+    return new Promise(function (resolve, reject) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+      ta.remove();
+      ok ? resolve() : reject(new Error('execCommand copy failed'));
+    });
+  };
+
+  // 剪贴板 API 也可能因页面未聚焦、权限被拒而 reject，此时必须回退到 execCommand
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(fallback);
+  }
+  return fallback();
+}
+
+/* ---------------------------------------------------------------------
+ * 3. 数据持久化与数据校验
+ * ------------------------------------------------------------------- */
+
+/** 写入 localStorage（隐私模式下会抛异常，需要捕获） */
+function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.warn('保存失败', err);
+    toast('保存失败：当前浏览器不允许本地存储', 'error');
+  }
+}
+
+/** 读取 localStorage 并做一次数据清洗 */
+function load() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch (err) {
+    console.warn('读取本地数据失败', err);
+    return;
+  }
+  if (!raw) return;
+  try {
+    const normalized = normalizeData(JSON.parse(raw));
+    if (normalized) state = normalized;
+  } catch (err) {
+    console.warn('本地数据已损坏，忽略', err);
+  }
+}
+
+/**
+ * 数据校验与归一化：localStorage 与导入的 JSON 都走这里。
+ * 作用：过滤脏数据、剔除指向已不存在成员的记录、校正宿舍人数。
+ * @returns {{memberLimit:number, members:Array, expenses:Array}|null} 结构非法时返回 null
+ */
+function normalizeData(data) {
+  if (!data || typeof data !== 'object') return null;
+
+  // --- 成员 ---
+  // 先按人数的绝对上限截断，避免异常数据撑爆页面
+  const members = (Array.isArray(data.members) ? data.members : [])
+    .filter(m => m && typeof m.id === 'string' && typeof m.name === 'string' && m.name.trim() !== '')
+    .map(m => ({
+      id: m.id,
+      name: m.name.slice(0, 12),
+      // 成员照片（最多 2 张）：只接受内联图片 dataURL，避免非法内容被塞进 src
+      photos: Array.isArray(m.photos)
+        ? m.photos.filter(p => typeof p === 'string' && /^data:image\//.test(p)).slice(0, 2)
+        : []
+    }))
+    .slice(0, MAX_MEMBER_LIMIT);
+
+  // --- 宿舍人数 ---
+  // memberLimit 是上限，必须满足：2 <= memberLimit <= 12 且 >= 实际成员数
+  let memberLimit;
+  if (Number.isInteger(data.memberLimit) && data.memberLimit > 0) {
+    memberLimit = Math.min(Math.max(data.memberLimit, MIN_MEMBER_LIMIT), MAX_MEMBER_LIMIT);
+  } else {
+    // 兼容旧版本数据（那时没有 memberLimit 字段）：有成员就按默认值兜底，没成员则视为未设置
+    memberLimit = members.length > 0 ? Math.max(DEFAULT_MEMBER_LIMIT, members.length) : 0;
+  }
+  // 人数不能小于已有成员数，否则等于凭空删人、会破坏历史账目
+  if (members.length > memberLimit) memberLimit = members.length;
+
+  const idSet = new Set(members.map(m => m.id));
+
+  // --- 支出 ---
+  const expenses = (Array.isArray(data.expenses) ? data.expenses : [])
+    .filter(e => {
+      if (!e || typeof e !== 'object') return false;
+      if (typeof e.title !== 'string' || e.title.trim() === '') return false;
+      if (!Number.isInteger(e.amountCents) || e.amountCents <= 0) return false;
+      if (!idSet.has(e.payerId)) return false;                    // 付款人必须存在
+      if (!Array.isArray(e.participantIds)) return false;
+      return true;
+    })
+    .map(e => ({
+      id: typeof e.id === 'string' ? e.id : uid(),
+      title: e.title.slice(0, 30),
+      amountCents: e.amountCents,
+      payerId: e.payerId,
+      // 只保留仍然存在的参与人（导入的旧数据可能包含已删除成员）
+      participantIds: e.participantIds.filter(id => idSet.has(id)),
+      date: /^\d{4}-\d{2}-\d{2}$/.test(e.date) ? e.date : todayStr(),
+      category: CATEGORIES.some(c => c.key === e.category) ? e.category : 'other',
+      settled: e.settled === true,                                 // 旧数据没有该字段时默认为「未结清」
+      createdAt: Number.isFinite(e.createdAt) ? e.createdAt : Date.now()
+    }))
+    .filter(e => e.participantIds.length > 0);                    // 没有参与人的记录无意义
+
+  return { memberLimit, members, expenses };
+}
+
+/** 导出 JSON 备份文件 */
+function exportJSON() {
+  const payload = {
+    app: 'dorm-ledger',
+    version: 3,
+    exportedAt: new Date().toISOString(),
+    memberLimit: state.memberLimit,
+    members: state.members,
+    expenses: state.expenses
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '宿舍账本备份-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('已导出备份文件', 'success');
+}
+
+/** 导入 JSON 备份（覆盖当前数据） */
+function importJSON(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try {
+      data = JSON.parse(String(reader.result));
+    } catch (err) {
+      toast('导入失败：文件不是合法的 JSON', 'error');
+      return;
+    }
+    const normalized = normalizeData(data);
+    if (!normalized) {
+      toast('导入失败：不是本应用的备份文件', 'error');
+      return;
+    }
+    if (!confirm('导入将覆盖当前所有数据，确定继续吗？')) return;
+    state = normalized;
+    save();
+    resetExpenseForm();
+    refresh();
+    toast('导入成功：' + state.members.length + ' 名成员，' + state.expenses.length + ' 条支出', 'success');
+  };
+  reader.onerror = () => toast('读取文件失败', 'error');
+  reader.readAsText(file, 'utf-8');
+}
+
+/* ---------------------------------------------------------------------
+ * 4. 核心计算
+ * ------------------------------------------------------------------- */
+
+/**
+ * 把一笔金额公平拆分到多个参与人。
+ * 策略：整除后把余数按参与人顺序每人多分 1 分，保证拆分结果之和 === 原金额。
+ * 例：100 分由 3 人均摊 -> 34 / 33 / 33
+ */
+function splitAmount(totalCents, participantIds) {
+  const n = participantIds.length;
+  const result = {};
+  if (n === 0) return result;
+  const base = Math.floor(totalCents / n);
+  let remainder = totalCents % n;
+  participantIds.forEach(id => {
+    result[id] = base + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder--;
+  });
+  return result;
+}
+
+/**
+ * 计算每人：垫付总额、应分摊总额、净余额。
+ * 净余额 = 垫付 - 应分摊；正数代表别人欠他（应收），负数代表他欠别人（应付）。
+ * 数学性质：所有净余额之和恒为 0（因为垫付总和 === 分摊总和）。
+ */
+function computeStats() {
+  const paid = {};
+  const share = {};
+  state.members.forEach(m => { paid[m.id] = 0; share[m.id] = 0; });
+
+  let totalCents = 0;
+  state.expenses.forEach(e => {
+    if (e.settled) return;      // 已结清的账单保留在列表中，但不再计入当前账目
+    totalCents += e.amountCents;
+    if (paid[e.payerId] !== undefined) paid[e.payerId] += e.amountCents;
+    const split = splitAmount(e.amountCents, e.participantIds);
+    Object.keys(split).forEach(id => {
+      if (share[id] !== undefined) share[id] += split[id];
+    });
+  });
+
+  const balance = {};
+  state.members.forEach(m => { balance[m.id] = paid[m.id] - share[m.id]; });
+
+  return { paid, share, balance, totalCents };
+}
+
+/**
+ * 贪心结算算法：生成「谁转给谁多少钱」的转账列表，尽量减少转账笔数。
+ *
+ * 思路：每次取出「最大的债权人」和「最大的债务人」，
+ *       让债务人先还给债权人 min(欠款, 应收)，转完必然有一方清零，
+ *       于是每一轮至少消掉一个人，总笔数不超过 n-1 笔。
+ *
+ * 时间复杂度 O(n log n)，n ≤ 4，结果必定最优。
+ */
+function computeTransfers(balance) {
+  const creditors = [];  // 应收：{ id, amt }
+  const debtors = [];    // 应付：{ id, amt }
+  Object.keys(balance).forEach(id => {
+    const v = balance[id];
+    if (v > 0) creditors.push({ id: id, amt: v });
+    else if (v < 0) debtors.push({ id: id, amt: -v });
+  });
+
+  // 从大到小排序，保证每次处理的都是当前最大的一对
+  creditors.sort((a, b) => b.amt - a.amt);
+  debtors.sort((a, b) => b.amt - a.amt);
+
+  const transfers = [];
+  let i = 0;
+  let j = 0;
+  while (i < creditors.length && j < debtors.length) {
+    const amount = Math.min(creditors[i].amt, debtors[j].amt);   // 全整数运算，无精度问题
+    if (amount > 0) {
+      transfers.push({ from: debtors[j].id, to: creditors[i].id, amt: amount });
+    }
+    creditors[i].amt -= amount;
+    debtors[j].amt -= amount;
+    if (creditors[i].amt === 0) i++;
+    if (debtors[j].amt === 0) j++;
+  }
+  return transfers;
+}
+
+/* ---------------------------------------------------------------------
+ * 5. 渲染层
+ * ------------------------------------------------------------------- */
+
+/** 通过 id 找成员姓名（找不到说明数据异常，给出兜底文案） */
+function nameOf(id) {
+  const m = state.members.find(x => x.id === id);
+  return m ? m.name : '未知成员';
+}
+
+/** 成员列表 + 人数徽章 + 表单可用状态 */
+function renderMembers() {
+  const listEl = document.getElementById('member-list');
+  const emptyEl = document.getElementById('member-empty');
+  const countEl = document.getElementById('member-count');
+  const input = document.getElementById('member-name');
+  const addBtn = document.getElementById('btn-add-member');
+  const limitInput = document.getElementById('member-limit');
+  const limitHint = document.getElementById('limit-hint');
+  const minusBtn = document.getElementById('limit-minus');
+  const plusBtn = document.getElementById('limit-plus');
+
+  const limit = state.memberLimit;      // 0 表示用户还没设置宿舍人数
+  const isSet = limit > 0;
+
+  // 回填人数输入框；正在输入时不打断用户
+  if (document.activeElement !== limitInput) {
+    limitInput.value = isSet ? String(limit) : '';
+  }
+
+  // 徽章与进度提示：如实反映「已添加 / 宿舍人数」
+  countEl.textContent = isSet ? (state.members.length + ' / ' + limit) : '未设置';
+  limitHint.className = 'limit-hint';
+  if (!isSet) {
+    limitHint.textContent = '先设置人数，再逐个添加室友姓名（' + MIN_MEMBER_LIMIT + '~' + MAX_MEMBER_LIMIT + ' 人）';
+  } else if (state.members.length < limit) {
+    limitHint.textContent = '还差 ' + (limit - state.members.length) + ' 人未添加';
+    limitHint.className = 'limit-hint warn';
+  } else {
+    limitHint.textContent = '成员已满';
+  }
+
+  // 步进器边界：不能小于已有成员数，也不能超出 2~12 的取值范围
+  minusBtn.disabled = isSet && limit <= Math.max(MIN_MEMBER_LIMIT, state.members.length);
+  plusBtn.disabled = isSet && limit >= MAX_MEMBER_LIMIT;
+
+  // 未设置人数或已满员时，都不允许继续添加
+  const isFull = isSet && state.members.length >= limit;
+  input.disabled = !isSet || isFull;
+  addBtn.disabled = !isSet || isFull;
+  input.placeholder = !isSet
+    ? '请先设置宿舍人数'
+    : (isFull ? '成员已满（' + limit + ' 人）' : '输入成员姓名（最多12字）');
+
+  emptyEl.hidden = state.members.length > 0;
+
+  listEl.innerHTML = state.members.map(m =>
+    '<span class="member-chip">' +
+      '<button type="button" class="member-open" data-photo-member="' + esc(m.id) + '" title="点击查看 / 添加照片" aria-haspopup="dialog" aria-expanded="' + (openPhotoMemberId === m.id) + '">' + esc(m.name) + '</button>' +
+      '<button type="button" class="member-del" data-del-member="' + esc(m.id) + '" title="删除成员" aria-label="删除成员">' + ICON_CLOSE + '</button>' +
+    '</span>'
+  ).join('');
+
+  // 没有成员时不允许记账
+  document.getElementById('btn-add-expense').disabled = state.members.length === 0;
+  document.getElementById('form-hint').hidden = state.members.length > 0;
+}
+
+/** 把人数输入框回退为当前已保存的值（输入非法或放弃修改时用） */
+function revertLimitInput() {
+  document.getElementById('member-limit').value = state.memberLimit > 0 ? String(state.memberLimit) : '';
+}
+
+/** 构建「付款人标签单选」与「参与分摊标签多选」，默认全部成员参与分摊 */
+function buildFormOptions() {
+  const payerSel = document.getElementById('exp-payer');
+  const payerTags = document.getElementById('exp-payer-tags');
+  const partBox = document.getElementById('exp-participants');
+
+  // 原生 select 作为取值来源，选项始终与成员一致
+  payerSel.innerHTML = state.members.map(m =>
+    '<option value="' + esc(m.id) + '">' + esc(m.name) + '</option>'
+  ).join('');
+
+  if (state.members.length === 0) {
+    payerTags.innerHTML = '<span class="empty-small">请先在上方添加宿舍成员</span>';
+    partBox.innerHTML = '<p class="empty-small">请先在上方添加宿舍成员</p>';
+    syncTagStates();
+    return;
+  }
+
+  // 付款人：标签式单选（视觉层），默认选中第一位成员
+  payerTags.innerHTML = state.members.map((m, i) =>
+    '<label class="chk">' +
+      '<input type="radio" name="payer-choice" value="' + esc(m.id) + '"' + (i === 0 ? ' checked' : '') + '>' +
+      '<span class="chk-check" aria-hidden="true">' + ICON_CHECK + '</span>' +
+      '<span>' + esc(m.name) + '</span>' +
+    '</label>'
+  ).join('');
+  payerSel.value = state.members[0].id;
+
+  // 参与分摊：标签式多选，默认全选
+  partBox.innerHTML = state.members.map(m =>
+    '<label class="chk">' +
+      '<input type="checkbox" value="' + esc(m.id) + '" checked>' +
+      '<span class="chk-check" aria-hidden="true">' + ICON_CHECK + '</span>' +
+      '<span>' + esc(m.name) + '</span>' +
+    '</label>'
+  ).join('');
+
+  syncTagStates();
+}
+
+/**
+ * 把标签的选中态（.is-on）与内部原生输入的 checked 同步。
+ * 之所以用类而不是 :has()，是为了让「是否选中」这件事在任何浏览器下都可确定、可断言。
+ */
+function syncTagStates() {
+  Array.prototype.forEach.call(document.querySelectorAll('.chk'), function (label) {
+    const input = label.querySelector('input');
+    if (input) label.classList.toggle('is-on', input.checked);
+  });
+}
+
+/** 重置支出表单（添加成功后 / 成员变化时调用） */
+function resetExpenseForm() {
+  document.getElementById('exp-title').value = '';
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-date').value = todayStr();
+  buildFormOptions();
+}
+
+/** 账目统计表 */
+function renderStats() {
+  const stats = computeStats();
+  const body = document.getElementById('stats-body');
+  const foot = document.getElementById('stats-foot');
+
+  let settledTotal = 0;
+  state.expenses.forEach(e => { if (e.settled) settledTotal += e.amountCents; });
+  document.getElementById('total-spend').textContent =
+    '待结清 ' + fmt(stats.totalCents) + (settledTotal > 0 ? ' · 已结清 ' + fmt(settledTotal) : '');
+
+  if (state.members.length === 0) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">请先添加宿舍成员</td></tr>';
+    foot.innerHTML = '';
+    return;
+  }
+
+  body.innerHTML = state.members.map(m => {
+    const b = stats.balance[m.id];
+    let cls = 'zero';
+    let text = '已结清';
+    if (b > 0) { cls = 'pos'; text = '应收 ' + fmt(b); }
+    else if (b < 0) { cls = 'neg'; text = '应付 ' + fmt(-b); }
+    return '<tr>' +
+      '<td>' + esc(m.name) + '</td>' +
+      '<td>' + fmt(stats.paid[m.id]) + '</td>' +
+      '<td>' + fmt(stats.share[m.id]) + '</td>' +
+      '<td class="' + cls + '">' + text + '</td>' +
+    '</tr>';
+  }).join('');
+
+  foot.innerHTML = '<tr>' +
+    '<td>合计</td>' +
+    '<td>' + fmt(stats.totalCents) + '</td>' +
+    '<td>' + fmt(stats.totalCents) + '</td>' +
+    '<td class="zero">' + fmt(0) + '</td>' +
+  '</tr>';
+}
+
+/** 结算方案列表 */
+function renderSettlement() {
+  const box = document.getElementById('settlement');
+
+  if (state.expenses.length === 0) {
+    box.innerHTML = '<div class="empty-state">' + ICON_EMPTY_SETTLE +
+      '<p class="empty">还没有支出记录，记完第一笔就会自动算出一份「谁转给谁」的转账方案</p></div>';
+    return;
+  }
+
+  const stats = computeStats();
+  const transfers = computeTransfers(stats.balance);
+
+  if (transfers.length === 0) {
+    box.innerHTML = '<div class="empty-state">' + ICON_EMPTY_OK +
+      '<p class="empty success-text">账目已平，大家互不相欠，无需任何转账</p></div>';
+    return;
+  }
+
+  box.innerHTML =
+    '<p class="settle-hint">' + ICON_FLOW +
+      '共 ' + transfers.length + ' 笔转账，全部完成后账目两清（尽可能少的转账次数）</p>' +
+    '<div class="settle-list">' +
+      transfers.map(t => {
+        const fromName = nameOf(t.from);
+        const toName = nameOf(t.to);
+        return '<div class="transfer">' +
+          '<span class="avatar" aria-hidden="true">' + esc(fromName.slice(0, 1)) + '</span>' +
+          '<span class="who">' + esc(fromName) + '</span>' +
+          '<span class="arrow" aria-hidden="true">' + ICON_FLOW + '</span>' +
+          '<span class="avatar to" aria-hidden="true">' + esc(toName.slice(0, 1)) + '</span>' +
+          '<span class="who">' + esc(toName) + '</span>' +
+          '<span class="amt">' + fmt(t.amt) + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+}
+
+/** 支出记录列表（按日期倒序，同日期按录入时间倒序） */
+function renderExpenseList() {
+  const listEl = document.getElementById('expense-list');
+  const emptyEl = document.getElementById('expense-empty');
+
+  const settledCount = state.expenses.filter(e => e.settled).length;
+  document.getElementById('expense-count').textContent =
+    state.expenses.length + ' 条' + (settledCount > 0 ? ' · 已结清 ' + settledCount : '');
+
+  if (state.expenses.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+
+  const sorted = state.expenses.slice().sort((a, b) =>
+    b.date.localeCompare(a.date) || (b.createdAt - a.createdAt)
+  );
+
+  listEl.innerHTML = sorted.map(e => {
+    const cat = CATEGORIES.find(c => c.key === e.category) || CATEGORIES[CATEGORIES.length - 1];
+    const isAll = e.participantIds.length === state.members.length;
+    const partText = isAll ? '全体成员' : e.participantIds.map(nameOf).join('、');
+    return '<li class="expense-item' + (e.settled ? ' is-settled' : '') + '">' +
+      '<div class="exp-main">' +
+        '<div class="exp-row">' +
+          '<span class="tag ' + cat.cls + '">' + cat.label + '</span>' +
+          '<span class="exp-title">' + esc(e.title) + '</span>' +
+          (e.settled ? '<span class="settle-badge">已结清</span>' : '') +
+          '<span class="exp-amount">' + fmt(e.amountCents) + '</span>' +
+        '</div>' +
+        '<div class="exp-meta">' + esc(e.date) + ' · 付款人：' + esc(nameOf(e.payerId)) +
+          ' · 分摊：' + esc(partText) + '</div>' +
+      '</div>' +
+      '<div class="exp-actions">' +
+        '<button type="button" class="btn btn-small ' + (e.settled ? 'btn-soft' : 'btn-settle') + '" data-settle-expense="' + esc(e.id) + '" title="' + (e.settled ? '撤销结清，重新计入当前账目' : '标记为已结清，账单保留但不再计入当前账目') + '">' + (e.settled ? '撤销结清' : '结清') + '</button>' +
+        '<button type="button" class="btn btn-danger-ghost btn-small" data-del-expense="' + esc(e.id) + '">删除</button>' +
+      '</div>' +
+    '</li>';
+  }).join('');
+}
+
+/* ---- 成员照片弹层：点姓名展开两个竖向空槽，选图后写入成员数据 ---- */
+
+/** 当前展开照片弹层的成员 id（null 表示未展开） */
+let openPhotoMemberId = null;
+/** 记录「哪个成员的哪个槽位」正在等待文件选择结果 */
+let photoSlotTarget = null;
+
+/** 按 id 找成员 */
+function memberById(id) { return state.members.find(m => m.id === id) || null; }
+
+/** 通过 data 属性找姓名按钮（不把 id 直接拼进选择器，避免特殊字符出错） */
+function findMemberOpenButton(id) {
+  const nodes = document.querySelectorAll('[data-photo-member]');
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].getAttribute('data-photo-member') === id) return nodes[i];
+  }
+  return null;
+}
+
+/** 重绘弹层内容：两个槽位——有照片显示照片，没有则显示虚线边框 + 相机图标 */
+function renderPhotoPopover() {
+  const pop = document.getElementById('photo-pop');
+  const m = openPhotoMemberId ? memberById(openPhotoMemberId) : null;
+  if (!m) { pop.hidden = true; pop.innerHTML = ''; return; }
+
+  pop.innerHTML =
+    '<div class="photo-pop-head">' +
+      '<span class="photo-pop-avatar" aria-hidden="true">' + esc(m.name.slice(0, 1)) + '</span>' +
+      '<span class="photo-pop-name">' + esc(m.name) + '</span>' +
+    '</div>' +
+    [0, 1].map(function (i) {
+      const src = (m.photos && m.photos[i]) ? m.photos[i] : '';
+      if (src) {
+        return '<div class="photo-slot-wrap">' +
+          '<button type="button" class="photo-slot has-img" data-photo-slot="' + i + '" title="点击查看大图">' +
+            '<img src="' + esc(src) + '" alt="' + esc(m.name) + '的照片">' +
+          '</button>' +
+          '<button type="button" class="photo-rm" data-photo-remove="' + i + '" title="移除照片" aria-label="移除照片">' + ICON_X_SMALL + '</button>' +
+        '</div>';
+      }
+      return '<button type="button" class="photo-slot" data-photo-slot="' + i + '" title="从相册 / 本地添加照片">' +
+        ICON_CAM + '<span>添加照片</span>' +
+      '</button>';
+    }).join('');
+  pop.hidden = false;
+}
+
+/** 贴着姓名按钮展开（水平以按钮为中心；下方空间不够时向上翻转） */
+function positionPhotoPopover() {
+  const pop = document.getElementById('photo-pop');
+  if (pop.hidden || !openPhotoMemberId) return;
+  const btn = findMemberOpenButton(openPhotoMemberId);
+  if (!btn) return;
+  const r = btn.getBoundingClientRect();
+  const pw = pop.offsetWidth;
+  const ph = pop.offsetHeight;
+  let left = r.left + r.width / 2 - pw / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+  let top = r.bottom + 8;
+  if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 8);
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+
+/** 同步姓名按钮的 aria-expanded */
+function syncMemberOpenAria() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-photo-member]'), function (n) {
+    n.setAttribute('aria-expanded', String(n.getAttribute('data-photo-member') === openPhotoMemberId));
+  });
+}
+
+/** 展开某位成员的照片弹层 */
+function openPhotoPopover(id) {
+  openPhotoMemberId = id;
+  renderPhotoPopover();
+  syncMemberOpenAria();
+  positionPhotoPopover();
+}
+
+/** 收起照片弹层 */
+function closePhotoPopover() {
+  openPhotoMemberId = null;
+  const pop = document.getElementById('photo-pop');
+  pop.hidden = true;
+  pop.innerHTML = '';
+  syncMemberOpenAria();
+}
+
+/**
+ * 读图：把用户选中的文件读成可绘制的 Image 对象（不裁剪、不压缩，只做解码）。
+ * 之所以先解码再交给裁剪层，是因为裁剪需要拿到原始像素尺寸来确定可裁范围。
+ */
+function readImageFile(file, cb) {
+  if (!file || !/^image\//.test(file.type || '')) { cb(null); return; }
+  const reader = new FileReader();
+  reader.onload = function () {
+    const img = new Image();
+    img.onload = function () { cb(img); };
+    img.onerror = function () { cb(null); };
+    img.src = String(reader.result);
+  };
+  reader.onerror = function () { cb(null); };
+  reader.readAsDataURL(file);
+}
+
+/**
+ * 从原图裁出 (sx, sy, sw, sh) 区域 -> 等比缩到最长边 360px -> 输出 JPEG dataURL。
+ * 必须先压缩再入库：localStorage 容量有限，原图 base64 会迅速撑爆存储。
+ */
+function cropToDataUrl(img, sx, sy, sw, sh, cb) {
+  try {
+    const scale = Math.min(1, 360 / Math.max(sw, sh));
+    const w = Math.max(1, Math.round(sw * scale));
+    const h = Math.max(1, Math.round(sh * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';       // 透明 PNG 转 JPEG 时先铺白底，避免出现黑块
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    cb(canvas.toDataURL('image/jpeg', 0.72));
+  } catch (err) {
+    cb(null);
+  }
+}
+
+/* ---- 照片查看：点已放入的照片 -> 放大查看，可更换 / 移除 ---- */
+let photoViewIndex = null;
+let viewActive = false;
+
+function openPhotoView(index) {
+  const m = openPhotoMemberId ? memberById(openPhotoMemberId) : null;
+  if (!m || !Array.isArray(m.photos) || !m.photos[index]) return;
+  photoViewIndex = index;
+  const view = document.getElementById('photo-view');
+  view.innerHTML =
+    '<div class="photo-view-panel">' +
+      '<button type="button" class="photo-view-close" data-view-close aria-label="关闭">' + ICON_X_SMALL + '</button>' +
+      '<img class="photo-view-img" src="' + esc(m.photos[index]) + '" alt="' + esc(m.name) + '的照片">' +
+      '<div class="photo-view-actions">' +
+        '<button type="button" class="btn btn-small" data-view-replace>更换照片</button>' +
+        '<button type="button" class="btn btn-small btn-danger-ghost" data-view-remove>移除照片</button>' +
+      '</div>' +
+    '</div>';
+  view.hidden = false;
+  viewActive = true;
+}
+
+function closePhotoView() {
+  viewActive = false;
+  photoViewIndex = null;
+  document.getElementById('photo-view').hidden = true;   // 保留内部结构：本次点击事件冒泡到 document 时仍能识别来源
+}
+
+/* ---- 照片裁剪：选图后先在方框里裁剪，确认后再压缩入库 ---- */
+let cropImgEl = null;
+let cropNatW = 0, cropNatH = 0;
+let cropDispW = 0, cropDispH = 0;
+let cropRect = { x: 0, y: 0, w: 0, h: 0 };
+let cropDrag = null;
+let cropActive = false;
+const CROP_MIN = 40;          // 裁剪框最小边长（显示像素）
+
+function paintCropBox() {
+  const box = document.querySelector('#crop-mask .crop-box');
+  if (!box) return;
+  box.style.left = cropRect.x + 'px';
+  box.style.top = cropRect.y + 'px';
+  box.style.width = cropRect.w + 'px';
+  box.style.height = cropRect.h + 'px';
+}
+
+function openCrop(img) {
+  cropImgEl = img;
+  cropNatW = img.naturalWidth || img.width;
+  cropNatH = img.naturalHeight || img.height;
+  if (!cropNatW || !cropNatH) { toast('图片读取失败，请换一张试试', 'error'); return; }
+
+  const maxW = Math.min(window.innerWidth - 48, 440);
+  const maxH = Math.max(140, window.innerHeight - 260);
+  const scale = Math.min(maxW / cropNatW, maxH / cropNatH, 2.5);
+  cropDispW = Math.max(1, Math.round(cropNatW * scale));
+  cropDispH = Math.max(1, Math.round(cropNatH * scale));
+
+  const mask = document.getElementById('crop-mask');
+  mask.innerHTML =
+    '<div class="crop-panel">' +
+      '<div class="crop-head">裁剪照片</div>' +
+      '<div class="crop-stage" style="width:' + cropDispW + 'px;height:' + cropDispH + 'px">' +
+        '<img class="crop-img" alt="" style="width:' + cropDispW + 'px;height:' + cropDispH + 'px">' +
+        '<div class="crop-box">' +
+          '<span class="crop-hd" data-crop-dir="nw"></span>' +
+          '<span class="crop-hd" data-crop-dir="ne"></span>' +
+          '<span class="crop-hd" data-crop-dir="sw"></span>' +
+          '<span class="crop-hd" data-crop-dir="se"></span>' +
+        '</div>' +
+      '</div>' +
+      '<p class="crop-tip">拖动方框调整位置，拖动四角缩放</p>' +
+      '<div class="crop-actions">' +
+        '<button type="button" class="btn" data-crop-cancel>取消</button>' +
+        '<button type="button" class="btn btn-primary" data-crop-apply>确定</button>' +
+      '</div>' +
+    '</div>';
+  mask.querySelector('.crop-img').src = img.src;   // 用属性赋值而非拼字符串，避免 dataURL 转义问题
+  mask.hidden = false;
+  cropActive = true;
+
+  cropRect = {
+    x: Math.round(cropDispW * 0.1),
+    y: Math.round(cropDispH * 0.1),
+    w: Math.round(cropDispW * 0.8),
+    h: Math.round(cropDispH * 0.8)
+  };
+  paintCropBox();
+}
+
+function closeCrop() {
+  cropActive = false;
+  cropDrag = null;
+  document.removeEventListener('pointermove', cropPointerMove);
+  document.removeEventListener('pointerup', cropPointerUp);
+  document.removeEventListener('pointercancel', cropPointerUp);
+  document.getElementById('crop-mask').hidden = true;
+}
+
+function cropPointerMove(ev) {
+  if (!cropDrag) return;
+  const dx = ev.clientX - cropDrag.startX;
+  const dy = ev.clientY - cropDrag.startY;
+  const s = cropDrag.start;
+  let x = s.x, y = s.y, w = s.w, h = s.h;
+
+  if (cropDrag.mode === 'move') {
+    x = Math.max(0, Math.min(s.x + dx, cropDispW - w));
+    y = Math.max(0, Math.min(s.y + dy, cropDispH - h));
+  } else {
+    const dir = cropDrag.dir;
+    if (dir.indexOf('e') !== -1) w = Math.max(CROP_MIN, Math.min(s.w + dx, cropDispW - s.x));
+    if (dir.indexOf('s') !== -1) h = Math.max(CROP_MIN, Math.min(s.h + dy, cropDispH - s.y));
+    if (dir.indexOf('w') !== -1) {
+      x = Math.max(0, Math.min(s.x + dx, s.x + s.w - CROP_MIN));
+      w = s.x + s.w - x;
+    }
+    if (dir.indexOf('n') !== -1) {
+      y = Math.max(0, Math.min(s.y + dy, s.y + s.h - CROP_MIN));
+      h = s.y + s.h - y;
+    }
+  }
+  cropRect = { x: x, y: y, w: w, h: h };
+  paintCropBox();
+}
+
+function cropPointerUp() {
+  cropDrag = null;
+  document.removeEventListener('pointermove', cropPointerMove);
+  document.removeEventListener('pointerup', cropPointerUp);
+  document.removeEventListener('pointercancel', cropPointerUp);
+}
+
+/** 把显示坐标换算回原图像素，裁出该区域并压缩入库 */
+function applyCrop() {
+  if (!cropImgEl) { photoSlotTarget = null; closeCrop(); return; }
+  const target = photoSlotTarget;
+  const img = cropImgEl;
+  const k = cropNatW / cropDispW;          // 显示等比缩放，x/y 共用一个比例
+  let sx = Math.round(cropRect.x * k);
+  let sy = Math.round(cropRect.y * k);
+  let sw = Math.round(cropRect.w * k);
+  let sh = Math.round(cropRect.h * k);
+  sx = Math.max(0, Math.min(sx, cropNatW - 1));
+  sy = Math.max(0, Math.min(sy, cropNatH - 1));
+  sw = Math.max(1, Math.min(sw, cropNatW - sx));
+  sh = Math.max(1, Math.min(sh, cropNatH - sy));
+
+  photoSlotTarget = null;
+  closeCrop();
+  cropToDataUrl(img, sx, sy, sw, sh, function (dataUrl) {
+    if (!dataUrl) { toast('图片处理失败，请换一张试试', 'error'); return; }
+    commitPhoto(target, dataUrl);
+  });
+}
+
+/** 把裁好的照片写回成员数据，并刷新弹层 */
+function commitPhoto(target, dataUrl) {
+  if (!target) return;
+  const m = memberById(target.memberId);
+  if (!m) return;
+  if (!Array.isArray(m.photos)) m.photos = [];
+  m.photos[target.index] = dataUrl;
+  save();
+  if (openPhotoMemberId === target.memberId) {
+    renderPhotoPopover();
+    positionPhotoPopover();
+  }
+  toast('照片已保存', 'success');
+}
+
+/** 打开系统相册 / 文件选择，为指定成员的第 index 个槽位选图 */
+function pickPhotoFor(memberId, index) {
+  photoSlotTarget = { memberId: memberId, index: index };
+  const fileInput = document.getElementById('photo-file');
+  fileInput.value = '';       // 清空以便重复选择同一张图
+  fileInput.click();
+}
+
+/**
+ * 生成「给人看」的纯文字账单，用于一键复制到微信 / 记事本 / 备忘录。
+ * 与 JSON 备份的分工：JSON 供程序导入恢复（含 id、分类 key 等机器信息），
+ * 这里只追求人一眼能读懂，所以是纯文本、无任何转义字符。
+ */
+function buildBillText() {
+  const stats = computeStats();
+  const transfers = computeTransfers(stats.balance);
+  const lines = [];
+
+  let settledTotal = 0;
+  let settledCount = 0;
+  state.expenses.forEach(e => { if (e.settled) { settledTotal += e.amountCents; settledCount++; } });
+
+  lines.push('【宿舍账本】账单');
+  lines.push('待结清总额：' + fmt(stats.totalCents) + (settledTotal > 0 ? '（另有已结清 ' + fmt(settledTotal) + '）' : ''));
+  lines.push('');
+
+  // 一、成员结算（当前待结清）
+  lines.push('一、成员结算（当前待结清）');
+  state.members.forEach(m => {
+    const b = stats.balance[m.id];
+    let balanceText = '已结清';
+    if (b > 0) balanceText = '应收 ' + fmt(b);
+    else if (b < 0) balanceText = '应付 ' + fmt(-b);
+    lines.push('  ' + m.name + '：垫付 ' + fmt(stats.paid[m.id]) +
+      '，应分摊 ' + fmt(stats.share[m.id]) + '，' + balanceText);
+  });
+  lines.push('');
+
+  // 二、转账方案
+  lines.push('二、转账方案（' + transfers.length + ' 笔）');
+  if (transfers.length === 0) {
+    lines.push('  账目已结清，无需转账');
+  } else {
+    transfers.forEach((t, i) => {
+      lines.push('  ' + (i + 1) + '. ' + nameOf(t.from) + ' 转给 ' + nameOf(t.to) + ' ' + fmt(t.amt));
+    });
+  }
+  lines.push('');
+
+  // 三、支出明细（与页面一致的排序：日期倒序，同日期按录入时间倒序）
+  lines.push('三、支出明细（共 ' + state.expenses.length + ' 笔' + (settledCount > 0 ? '，其中已结清 ' + settledCount + ' 笔' : '') + '）');
+  if (state.expenses.length === 0) {
+    lines.push('  暂无支出记录');
+  } else {
+    const sorted = state.expenses.slice().sort((a, b) =>
+      b.date.localeCompare(a.date) || (b.createdAt - a.createdAt)
+    );
+    sorted.forEach((e, i) => {
+      const cat = CATEGORIES.find(c => c.key === e.category) || CATEGORIES[CATEGORIES.length - 1];
+      const isAll = e.participantIds.length === state.members.length;
+      const partText = isAll ? '全体成员' : e.participantIds.map(nameOf).join('、');
+      lines.push('  ' + (i + 1) + '. ' + e.date + ' [' + cat.label + '] ' + e.title +
+        ' ' + fmt(e.amountCents) + ' ｜付款：' + nameOf(e.payerId) + ' ｜分摊：' + partText +
+        (e.settled ? ' ｜已结清' : ''));
+    });
+  }
+  lines.push('');
+  lines.push('生成时间：' + new Date().toLocaleString('zh-CN', { hour12: false }));
+
+  return lines.join('\n');
+}
+
+/** 刷新所有依赖数据的区域 */
+function refresh() {
+  renderMembers();
+  renderStats();
+  renderSettlement();
+  renderExpenseList();
+  // 照片弹层跟随数据刷新：成员还在就重绘并重新定位，否则收起
+  if (openPhotoMemberId) {
+    if (memberById(openPhotoMemberId)) { renderPhotoPopover(); positionPhotoPopover(); }
+    else { closePhotoPopover(); }
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * 6. 事件绑定与初始化
+ * ------------------------------------------------------------------- */
+
+/** 把人数写入输入框并触发原有的 change 校验流程（步进器与手输共用同一套规则） */
+function setLimitValue(value) {
+  const input = document.getElementById('member-limit');
+  input.value = String(value);
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** 步进器：− / + */
+document.getElementById('limit-minus').addEventListener('click', function () {
+  if (state.memberLimit <= 0) { setLimitValue(MIN_MEMBER_LIMIT); return; }
+  setLimitValue(state.memberLimit - 1);
+});
+document.getElementById('limit-plus').addEventListener('click', function () {
+  if (state.memberLimit <= 0) { setLimitValue(DEFAULT_MEMBER_LIMIT); return; }
+  setLimitValue(state.memberLimit + 1);
+});
+
+/** 设置 / 修改宿舍人数（即成员上限） */
+document.getElementById('member-limit').addEventListener('change', function () {
+  const raw = this.value.trim();
+  const next = parseInt(raw, 10);
+
+  // 清空输入 = 放弃修改，保持原值
+  if (raw === '') { revertLimitInput(); renderMembers(); return; }
+
+  if (!/^\d+$/.test(raw) || next < MIN_MEMBER_LIMIT || next > MAX_MEMBER_LIMIT) {
+    toast('宿舍人数请填 ' + MIN_MEMBER_LIMIT + '~' + MAX_MEMBER_LIMIT + ' 之间的整数', 'error');
+    revertLimitInput(); renderMembers(); return;
+  }
+  // 不允许小于已有成员数：那等同于凭空删人，会让历史账目失去支撑
+  if (next < state.members.length) {
+    toast('已有 ' + state.members.length + ' 位成员，人数不能改成 ' + next, 'error');
+    revertLimitInput(); renderMembers(); return;
+  }
+  if (next === state.memberLimit) { revertLimitInput(); renderMembers(); return; }
+
+  state.memberLimit = next;
+  save();
+  renderMembers();
+  toast('宿舍人数已设为 ' + next + ' 人', 'success');
+});
+
+/** 添加成员 */
+document.getElementById('member-form').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+  const input = document.getElementById('member-name');
+  const name = input.value.trim();
+
+  if (state.memberLimit <= 0) { toast('请先设置宿舍人数', 'error'); return; }
+  if (!name) { toast('请输入成员姓名', 'error'); return; }
+  if (state.members.length >= state.memberLimit) {
+    toast('成员已达设定人数（' + state.memberLimit + ' 人）', 'error');
+    return;
+  }
+  if (state.members.some(m => m.name.toLowerCase() === name.toLowerCase())) { toast('该成员已存在', 'error'); return; }
+
+  state.members.push({ id: uid(), name: name.slice(0, 12) });
+  input.value = '';
+  save();
+  resetExpenseForm();
+  refresh();
+  toast('已添加成员「' + name + '」', 'success');
+});
+
+/** 删除成员（有支出关联时禁止删除） */
+document.getElementById('member-list').addEventListener('click', function (ev) {
+  // 点姓名 -> 展开 / 收起照片弹层
+  const openBtn = ev.target.closest('[data-photo-member]');
+  if (openBtn) {
+    const openId = openBtn.getAttribute('data-photo-member');
+    if (openPhotoMemberId === openId) closePhotoPopover();
+    else openPhotoPopover(openId);
+    return;
+  }
+
+  const btn = ev.target.closest('[data-del-member]');
+  if (!btn) return;
+
+  const id = btn.getAttribute('data-del-member');
+  const member = state.members.find(m => m.id === id);
+  if (!member) return;
+
+  const used = state.expenses.some(e => e.payerId === id || e.participantIds.indexOf(id) !== -1);
+  if (used) {
+    toast('「' + member.name + '」已有支出记录，无法删除', 'error');
+    return;
+  }
+  if (!confirm('确定删除成员「' + member.name + '」吗？')) return;
+
+  state.members = state.members.filter(m => m.id !== id);
+  if (openPhotoMemberId === id) closePhotoPopover();
+  save();
+  resetExpenseForm();
+  refresh();
+  toast('已删除成员', 'success');
+});
+
+/** 付款人标签单选 -> 同步回原生 select（select 始终是唯一取值来源） */
+document.getElementById('exp-payer-tags').addEventListener('change', function (ev) {
+  const radio = ev.target.closest('input[type="radio"]');
+  if (!radio) return;
+  document.getElementById('exp-payer').value = radio.value;
+  syncTagStates();
+});
+
+/** 参与分摊标签多选：点选后刷新选中态样式 */
+document.getElementById('exp-participants').addEventListener('change', function (ev) {
+  if (!ev.target.closest('input[type="checkbox"]')) return;
+  syncTagStates();
+});
+
+/** 添加支出 */
+document.getElementById('expense-form').addEventListener('submit', function (ev) {
+  ev.preventDefault();
+
+  if (state.members.length === 0) { toast('请先添加宿舍成员', 'error'); return; }
+
+  const title = document.getElementById('exp-title').value.trim();
+  const amountRaw = document.getElementById('exp-amount').value.trim();
+  const date = document.getElementById('exp-date').value || todayStr();
+  const payerId = document.getElementById('exp-payer').value;
+  const category = document.getElementById('exp-category').value;
+  const participantIds = Array.prototype.slice
+    .call(document.querySelectorAll('#exp-participants input:checked'))
+    .map(input => input.value);
+
+  if (!title) { toast('请填写支出事项', 'error'); return; }
+
+  const amountCents = parseYuanToCents(amountRaw);
+  if (amountCents === null) { toast('请输入正确的金额（大于 0，最多两位小数）', 'error'); return; }
+
+  if (!payerId) { toast('请选择付款人', 'error'); return; }
+  if (participantIds.length === 0) { toast('请至少选择一位参与分摊的成员', 'error'); return; }
+
+  state.expenses.push({
+    id: uid(),
+    title: title.slice(0, 30),
+    amountCents: amountCents,
+    payerId: payerId,
+    participantIds: participantIds,
+    date: date,
+    category: category,
+    settled: false,
+    createdAt: Date.now()
+  });
+
+  save();
+  resetExpenseForm();
+  refresh();
+  toast('已添加支出', 'success');
+});
+
+/** 参与分摊：全选 / 全不选 */
+function setAllParticipants(checked) {
+  Array.prototype.forEach.call(
+    document.querySelectorAll('#exp-participants input'),
+    input => { input.checked = checked; }
+  );
+  syncTagStates();
+}
+document.getElementById('btn-select-all').addEventListener('click', function () { setAllParticipants(true); });
+document.getElementById('btn-select-none').addEventListener('click', function () { setAllParticipants(false); });
+
+/** 删除支出记录 / 结清 · 撤销结清 */
+document.getElementById('expense-list').addEventListener('click', function (ev) {
+  // 结清 / 撤销结清：账单保留在列表中，结清后不再计入当前账目
+  const settleBtn = ev.target.closest('[data-settle-expense]');
+  if (settleBtn) {
+    const sid = settleBtn.getAttribute('data-settle-expense');
+    const item = state.expenses.find(e => e.id === sid);
+    if (!item) return;
+    item.settled = !item.settled;
+    save();
+    refresh();
+    toast(item.settled ? '已标记为「已结清」，不再计入当前账目' : '已撤销结清，该笔重新计入当前账目', 'success');
+    return;
+  }
+
+  const btn = ev.target.closest('[data-del-expense]');
+  if (!btn) return;
+
+  const id = btn.getAttribute('data-del-expense');
+  const expense = state.expenses.find(e => e.id === id);
+  if (!expense) return;
+  if (!confirm('确定删除支出「' + expense.title + '」吗？')) return;
+
+  state.expenses = state.expenses.filter(e => e.id !== id);
+  save();
+  refresh();
+  toast('已删除该条支出', 'success');
+});
+
+/* ---- 成员照片：槽位点击 / 移除 / 选图回调 ---- */
+document.getElementById('photo-pop').addEventListener('click', function (ev) {
+  // 移除某张照片
+  const rm = ev.target.closest('[data-photo-remove]');
+  if (rm) {
+    const idx = parseInt(rm.getAttribute('data-photo-remove'), 10);
+    const m = openPhotoMemberId ? memberById(openPhotoMemberId) : null;
+    if (m && Array.isArray(m.photos)) {
+      m.photos[idx] = null;
+      save();
+      renderPhotoPopover();
+      positionPhotoPopover();
+      toast('已移除照片', 'success');
+    }
+    return;
+  }
+  // 点槽位：空槽 -> 选图并裁剪；已有照片 -> 放大查看
+  const slot = ev.target.closest('[data-photo-slot]');
+  if (slot) {
+    const idx = parseInt(slot.getAttribute('data-photo-slot'), 10);
+    const m = openPhotoMemberId ? memberById(openPhotoMemberId) : null;
+    if (m && Array.isArray(m.photos) && m.photos[idx]) {
+      openPhotoView(idx);
+    } else {
+      pickPhotoFor(openPhotoMemberId, idx);
+    }
+  }
+});
+
+/* ---- 照片查看层：关闭 / 更换 / 移除 ---- */
+document.getElementById('photo-view').addEventListener('click', function (ev) {
+  if (ev.target.closest('[data-view-close]')) { closePhotoView(); return; }
+
+  if (ev.target.closest('[data-view-replace]')) {
+    const idx = photoViewIndex;
+    const memberId = openPhotoMemberId;
+    closePhotoView();
+    pickPhotoFor(memberId, idx);      // 换图同样走「选图 -> 裁剪」流程
+    return;
+  }
+
+  if (ev.target.closest('[data-view-remove]')) {
+    const m = openPhotoMemberId ? memberById(openPhotoMemberId) : null;
+    if (m && Array.isArray(m.photos) && photoViewIndex !== null) {
+      m.photos[photoViewIndex] = null;
+      save();
+      renderPhotoPopover();
+      positionPhotoPopover();
+      toast('已移除照片', 'success');
+    }
+    closePhotoView();
+    return;
+  }
+
+  // 点面板外的遮罩区域关闭
+  if (!ev.target.closest('.photo-view-panel')) closePhotoView();
+});
+
+/* ---- 裁剪层：取消 / 确定 / 拖动方框与四角缩放 ---- */
+document.getElementById('crop-mask').addEventListener('click', function (ev) {
+  if (ev.target.closest('[data-crop-cancel]')) { photoSlotTarget = null; closeCrop(); return; }
+  if (ev.target.closest('[data-crop-apply]')) { applyCrop(); return; }
+});
+document.getElementById('crop-mask').addEventListener('pointerdown', function (ev) {
+  const box = ev.target.closest('.crop-box');
+  if (!box) return;
+  ev.preventDefault();
+  const handle = ev.target.closest('[data-crop-dir]');
+  cropDrag = {
+    mode: handle ? 'resize' : 'move',
+    dir: handle ? handle.getAttribute('data-crop-dir') : 'move',
+    startX: ev.clientX,
+    startY: ev.clientY,
+    start: { x: cropRect.x, y: cropRect.y, w: cropRect.w, h: cropRect.h }
+  };
+  document.addEventListener('pointermove', cropPointerMove);
+  document.addEventListener('pointerup', cropPointerUp);
+  document.addEventListener('pointercancel', cropPointerUp);
+});
+
+document.getElementById('photo-file').addEventListener('change', function (ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file || !photoSlotTarget) return;
+
+  // 选完图先进入裁剪层；用户确认裁剪后才压缩入库
+  readImageFile(file, function (img) {
+    if (!img) { photoSlotTarget = null; toast('图片读取失败，请换一张试试', 'error'); return; }
+    openCrop(img);
+  });
+});
+
+/** 点击弹层外 / 按 Esc 收起照片弹层（放大层 / 裁剪层打开时不收起） */
+document.addEventListener('click', function (ev) {
+  if (!openPhotoMemberId) return;
+  if (ev.target.closest('#crop-mask')) return;
+  if (ev.target.closest('#photo-view')) return;
+  if (ev.target.closest('#photo-pop')) return;
+  if (ev.target.closest('[data-photo-member]')) return;   // 姓名按钮由上面的 handler 处理
+  closePhotoPopover();
+});
+document.addEventListener('keydown', function (ev) {
+  if (ev.key !== 'Escape') return;
+  if (cropActive) { photoSlotTarget = null; closeCrop(); return; }   // 裁剪层在最上层，优先响应
+  if (viewActive) { closePhotoView(); return; }
+  if (openPhotoMemberId) closePhotoPopover();
+});
+window.addEventListener('resize', positionPhotoPopover);
+window.addEventListener('scroll', positionPhotoPopover, true);
+
+/** 复制结算方案（便于直接发到宿舍群） */
+document.getElementById('btn-copy-settlement').addEventListener('click', function () {
+  const transfers = computeTransfers(computeStats().balance);
+  if (transfers.length === 0) { toast('当前无需转账', 'info'); return; }
+
+  const text = '【宿舍账本】结算方案\n' +
+    transfers.map(t => nameOf(t.from) + ' 转给 ' + nameOf(t.to) + ' ' + fmt(t.amt)).join('\n');
+
+  copyText(text)
+    .then(() => toast('结算方案已复制', 'success'))
+    .catch(() => toast('复制失败，请手动选择文本', 'error'));
+});
+
+/** 复制整份文字账单（给人看，可直接粘贴到微信 / 记事本） */
+document.getElementById('btn-copy-bill').addEventListener('click', function () {
+  if (state.members.length === 0 && state.expenses.length === 0) {
+    toast('当前没有数据可复制', 'info');
+    return;
+  }
+  copyText(buildBillText())
+    .then(() => toast('账单已复制，可直接粘贴到微信 / 记事本', 'success'))
+    .catch(() => toast('复制失败，请手动选择文本', 'error'));
+});
+
+/** 导出 / 导入 / 清空 */
+document.getElementById('btn-export').addEventListener('click', exportJSON);
+document.getElementById('btn-import').addEventListener('click', function () {
+  document.getElementById('import-file').click();
+});
+document.getElementById('import-file').addEventListener('change', function (ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';           // 允许重复选择同一个文件
+  if (file) importJSON(file);
+});
+document.getElementById('btn-clear').addEventListener('click', function () {
+  if (state.members.length === 0 && state.expenses.length === 0 && state.memberLimit === 0) { toast('当前没有数据', 'info'); return; }
+  if (!confirm('确定清空所有成员和支出记录吗？此操作不可撤销，建议先导出备份。')) return;
+  state = { memberLimit: 0, members: [], expenses: [] };
+  save();
+  resetExpenseForm();
+  refresh();
+  toast('已清空所有数据', 'success');
+});
+
+/** 初始化 */
+(function init() {
+  // 分类下拉
+  document.getElementById('exp-category').innerHTML = CATEGORIES.map((c, i) =>
+    '<option value="' + c.key + '"' + (i === 0 ? ' selected' : '') + '>' + c.label + '</option>'
+  ).join('');
+
+  load();               // 读取本地数据
+  resetExpenseForm();   // 表单默认值（日期 = 今天，参与人 = 全选）
+  refresh();            // 首屏渲染
+})();
+</script>
+
+<!-- =====================================================================
+     Android WebView 原生桥接层（仅在 Android 壳中生效）
+     · 普通浏览器 / file:// 双击打开时：window.AndroidBridge 不存在，整段脚本直接空跑，
+       网页行为与原来完全一致。
+     · Android 壳中：只接管「导出文件的落盘姿势」「剪贴板」「安全区/键盘尺寸传递」，
+       不修改任何业务函数、计算规则、数据结构与导出 JSON 结构。
+     ===================================================================== -->
+<script>
+(function () {
+  if (!window.AndroidBridge) return;   // 非 Android 环境：直接跳过
+
+  /* ---- 1) 导出：把 <a download> + blob 交给原生保存并分享 ----
+     网页原逻辑：URL.createObjectURL(blob) → <a download> 点击。
+     这里记住 url→blob 映射，并在 <a download> 被点击时改为把内容交给原生。 */
+  var _createObjectURL = URL.createObjectURL;
+  var _revokeObjectURL = URL.revokeObjectURL;
+  var _blobMap = {};
+
+  URL.createObjectURL = function (obj) {
+    var url = _createObjectURL.call(URL, obj);
+    try {
+      if (Object.prototype.toString.call(obj) === '[object Blob]') _blobMap[url] = obj;
+    } catch (e) {}
+    return url;
+  };
+
+  URL.revokeObjectURL = function (url) {
+    try { delete _blobMap[url]; } catch (e) {}
+    return _revokeObjectURL.call(URL, url);
+  };
+
+  var _anchorClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () {
+    try {
+      var name = this.getAttribute('download');
+      var href = this.getAttribute('href') || '';
+      if (name && _blobMap[href] && AndroidBridge.saveBlob) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          var result = String(reader.result);
+          var comma = result.indexOf(',');
+          var meta = result.slice(0, comma);
+          var base64 = result.slice(comma + 1);
+          var matched = meta.match(/data:([^;]*)/);
+          var mime = (matched && matched[1]) ? matched[1] : 'application/octet-stream';
+          try { AndroidBridge.saveBlob(name, mime, base64); } catch (e) {}
+        };
+        reader.readAsDataURL(_blobMap[href]);
+        return;   // 阻止 WebView 里注定失败的默认下载
+      }
+    } catch (e) {}
+    return _anchorClick.apply(this, arguments);
+  };
+
+  /* ---- 2) 剪贴板：file:// 属于非安全上下文，navigator.clipboard 常不存在，改用原生 ---- */
+  if (!navigator.clipboard || !navigator.clipboard.writeText) {
+    try {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: function (text) {
+            return new Promise(function (resolve, reject) {
+              try { AndroidBridge.copyText(String(text)); resolve(); }
+              catch (e) { reject(e); }
+            });
+          }
+        }
+      });
+    } catch (e) {}
+  }
+
+  /* ---- 3) 安全区 / 键盘：由原生侧调用，把尺寸写入 CSS 变量 ---- */
+  window.__applyInsets = function (insets) {
+    if (!insets) return;
+    var root = document.documentElement;
+    if (typeof insets.top === 'number') root.style.setProperty('--sat', insets.top + 'px');
+    if (typeof insets.bottom === 'number') root.style.setProperty('--sab', insets.bottom + 'px');
+    if (typeof insets.ime === 'number') root.style.setProperty('--kb', insets.ime + 'px');
+    root.classList.toggle('kb-open', !!insets.imeVisible);
+
+    // 刻意不做任何 scrollIntoView：
+    // 原生侧已按键盘高度收窄了 WebView，Chromium 会把聚焦的输入框自动滚到键盘上方，
+    // 这里再手动滚动会与浏览器原生滚动叠加，导致「整体上滑过多」。
+  };
+
+  /* ---- 4) 返回键支持：由原生侧询问「是否有弹层打开」/ 「关闭最上层弹层」 ---- */
+  window.__hasOverlay = function () {
+    return !!(document.querySelector('#crop-mask:not([hidden])') ||
+              document.querySelector('#photo-view:not([hidden])') ||
+              document.querySelector('#photo-pop:not([hidden])'));
+  };
+
+  window.__nativeBack = function () {
+    // 网页自身已有「按 Esc 逐层关闭弹层（裁剪层 > 放大层 > 照片气泡）」的逻辑，
+    // 这里派发一个 Esc 键事件即可复用，无需改动业务代码。
+    var evt = new KeyboardEvent('keydown', {
+      key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true
+    });
+    document.dispatchEvent(evt);
+    return true;
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 钱包主体（白色，位于自适应图标安全区内） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,38h48a7,7 0 0 1 7,7v18a7,7 0 0 1 -7,7h-48a7,7 0 0 1 -7,-7v-18a7,7 0 0 1 7,-7z" />
+    <!-- 卡扣（青绿色，与主题辅助色一致） -->
+    <path
+        android:fillColor="#0D9488"
+        android:pathData="M70,49h14a4,4 0 0 1 4,4v2a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-2a4,4 0 0 1 4,-4z" />
+    <!-- 顶部翻盖线条 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,30h30a3,3 0 0 1 0,6h-30a3,3 0 0 1 0,-6z" />
+</vector>
